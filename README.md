@@ -1,5 +1,5 @@
 # wafel_ax88772b
-Patches IOSU to use the AX88772B instead of AX88772B USB Ethernet Adapter.
+Patches IOSU to use the AX88772B instead of AX88772 USB Ethernet Adapter.
 
 **Warning:** with this plugin the original adapter with the AX88772 chipset will no longer be detected. 
 Also this patch only applies the the Wii U side. vWii would need patches to the vIOS.
