@@ -23,9 +23,14 @@ void ifprobe_callback_wrapper(void* context, UhsInterfaceProfile* profile){
     u16 vid = profile->dev_desc.idVendor;
     u16 pid = profile->dev_desc.idProduct;
     
+    debug_printf("ifprobe_callback_wrapper %x:%x\n", vid,pid);
+
     for(int i=0; i<USB_VID_PID_COUNT; i++){
         if(vid == usb_vid_pids[i][0] && pid == usb_vid_pids[i][1]){
-            debug_printf("AX88772: Acquireing Interface %X:%X\n", vid, pid);
+            u16 *vidpid = (u16*)0x12456dd0; // (context+8298);
+            vidpid[0] = vid;
+            vidpid[1] = pid;
+            debug_printf("AX88772b: Acquireing Interface %X:%X\n", vid, pid);
             uhsIfProbeCallback(context, profile);
             return;  
         }
