@@ -7,7 +7,7 @@ Patches IOSU to use the AX88772B instead of AX88772 USB Ethernet Adapter.
 
 ## How to use
 
-- Copy the `ax88772b.ipx` to `/wiiu/ios_plugins`
+- Copy the `usbeth.ipx` to `/wiiu/ios_plugins`
 
 ## Building
 
