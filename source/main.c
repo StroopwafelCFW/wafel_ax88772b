@@ -70,6 +70,7 @@ void rx_control_hook(trampoline_state *regs){
     if(chipcode >= AX_AX88772B_CHIPCODE){
         regs->r[1] &= ~AX_HEADERMODE_MASK; // meansing of these bits changed
     }
+    debug_printf("Setting rx control register to 0x%x\n", regs->r[1]);
 }
 
 // This fn runs before everything else in kernel mode.
