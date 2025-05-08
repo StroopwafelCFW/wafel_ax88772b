@@ -10,7 +10,9 @@
 #define AX_AX88772A_CHIPCODE		0x10
 #define AX_AX88772B_CHIPCODE		0x20
 #define AX_HOST_EN			0x01
-#define AX_HEADERMODE_MASK 0x70
+#define AX_HEADERMODE_MASK 0x700
+
+#define AX_CMD_STATMNGSTS_REG		0x09
 
 u16 usb_vid_pids[][2] = {   { 0x0b95, 0x7720 }, // AX88772
                             { 0x0b95, 0x772a }, // AX88772A
@@ -24,9 +26,11 @@ u16 usb_vid_pids[][2] = {   { 0x0b95, 0x7720 }, // AX88772
 
 #define UHS_IF_PROBE_CALLBACK_PTR 0x123b902c
 
-static u8 chipcode = 0;
+int (*ax8817xReadCommand)(int, int, u8, u16, u16, u16, u8*) = (void*)0x123b9ab4;
 
 void (*uhsIfProbeCallback)(void *context, UhsInterfaceProfile* profile) = (void*)0x123b8a34;
+
+static u8 chipcode = 0;
 
 void ifprobe_callback_wrapper(void* context, UhsInterfaceProfile* profile){
     u16 vid = profile->dev_desc.idVendor;
@@ -57,13 +61,10 @@ int register_driver_hook(int *handles, UhsInterfaceFilter *filter, void* context
     return register_driver_org(handles, filter, context, ifprobe_callback_wrapper);
 }
 
-int station_management_status_hook(void *context, int parm2, u8 cmd, u16 value, 
-                                    int (*ax8817xReadCommand)(void*, int, u8, u16, u16, u16, u8*), void *bl, 
-                                    u16 index, u16 size, u8 *data){
-    int ret = ax8817xReadCommand(context, parm2, cmd, value, index, size, data);
-    chipcode = (*data) & AX_CHIPCODE_MASK;
-    debug_printf("Chipcode: 0x%x\n", chipcode);
-    return ret;
+void read_chipcode_hook(trampoline_state *regs){
+    int ret = ax8817xReadCommand(regs->r[0], regs->r[1], AX_CMD_STATMNGSTS_REG, 0, 0, 1, &chipcode);
+    chipcode &= AX_CHIPCODE_MASK;
+    debug_printf("Read stms register returned %i, Chipcode: 0x%x\n", ret, chipcode);
 }
 
 void rx_control_hook(trampoline_state *regs){
@@ -89,7 +90,7 @@ void kern_main()
     trampoline_blreplace(0x123b8f7c, register_driver_hook);
 
     // get chipcode
-    trampoline_blreplace(0x123b9c2c, station_management_status_hook);
+    trampoline_hook_before(0x123ba1ec, read_chipcode_hook);
 
     // fix value written to RX Control Register
     trampoline_hook_before(0x123ba608, rx_control_hook);
