@@ -3,6 +3,8 @@
 #include <wafel/patch.h>
 #include <wafel/trampoline.h>
 #include "uhs.h"
+#include "iosu_ax88772.h"
+#include "ax88179.h"
 
 
 #define AX_CHIPCODE_MASK		0x70
@@ -14,23 +16,33 @@
 
 #define AX_CMD_STATMNGSTS_REG		0x09
 
-u16 usb_vid_pids[][2] = {   { 0x0b95, 0x7720 }, // AX88772
-                            { 0x0b95, 0x772a }, // AX88772A
-                            { 0x0b95, 0x772b }, // AX88772B
-                            { 0x0b95, 0x772c }, // AX88772C needs testing
-                            { 0x0b95, 0x772d }, // AX88772D needs testing
-                            { 0x0b95, 0x772e }, // AX88772E needs testing
-                            { 0x05ac, 0x1402 }, // Apple AX88772
+u16 usb_vid_pids[][2] = {   
+    { 0x0b95, 0x7720 }, // AX88772
+    { 0x0b95, 0x772a }, // AX88772A
+    { 0x05ac, 0x1402 }, // Apple AX88772A
+    { 0x0b95, 0x772b }, // AX88772B
+    { 0x0b95, 0x772c }, // AX88772C needs testing
 };
 #define USB_VID_PID_COUNT (sizeof(usb_vid_pids) / 4)
 
-#define UHS_IF_PROBE_CALLBACK_PTR 0x123b902c
+u16 ax88179_vid_pids[][2] = {
+    { 0x0b95, 0x1790 }, // AX88772D / AX88772E / AX881790 needs testing
+};
+#define AX88179_VID_PID_COUNT (sizeof(ax88179_vid_pids) / 4)
 
-int (*ax8817xReadCommand)(int, int, u8, u16, u16, u16, u8*) = (void*)0x123b9ab4;
+#define UHS_IF_PROBE_CALLBACK_PTR 0x123b902c
 
 void (*uhsIfProbeCallback)(void *context, UhsInterfaceProfile* profile) = (void*)0x123b8a34;
 
 static u8 chipcode = 0;
+
+static void claim_interface(void* context, UhsInterfaceProfile* profile){
+    u16 *vidpid = (u16*)0x12456dd0; // (context+8298);
+    vidpid[0] = profile->dev_desc.idVendor;
+    vidpid[1] = profile->dev_desc.idProduct;
+    debug_printf("AX88772b: Acquireing Interface %X:%X\n", vidpid[0], vidpid[1]);
+    uhsIfProbeCallback(context, profile);
+}
 
 void ifprobe_callback_wrapper(void* context, UhsInterfaceProfile* profile){
     u16 vid = profile->dev_desc.idVendor;
@@ -40,11 +52,16 @@ void ifprobe_callback_wrapper(void* context, UhsInterfaceProfile* profile){
 
     for(int i=0; i<USB_VID_PID_COUNT; i++){
         if(vid == usb_vid_pids[i][0] && pid == usb_vid_pids[i][1]){
-            u16 *vidpid = (u16*)0x12456dd0; // (context+8298);
-            vidpid[0] = vid;
-            vidpid[1] = pid;
-            debug_printf("AX88772b: Acquireing Interface %X:%X\n", vid, pid);
-            uhsIfProbeCallback(context, profile);
+            set_ax88179_mode(false);
+            claim_interface(context, profile);
+            return;  
+        }
+    }
+
+    for(int i=0; i<AX88179_VID_PID_COUNT; i++){
+        if(vid == ax88179_vid_pids[i][0] && pid == ax88179_vid_pids[i][1]){
+            set_ax88179_mode(true);
+            claim_interface(context, profile);
             return;  
         }
     }
@@ -62,7 +79,7 @@ int register_driver_hook(int *handles, UhsInterfaceFilter *filter, void* context
 }
 
 void read_chipcode_hook(trampoline_state *regs){
-    int ret = ax8817xReadCommand(regs->r[0], regs->r[1], AX_CMD_STATMNGSTS_REG, 0, 0, 1, &chipcode);
+    int ret = ax8817xReadCommand((void*)regs->r[0], (void*)regs->r[1], AX_CMD_STATMNGSTS_REG, 0, 0, 1, &chipcode);
     chipcode &= AX_CHIPCODE_MASK;
     debug_printf("Read stms register returned %i, Chipcode: 0x%x\n", ret, chipcode);
 }
@@ -94,6 +111,8 @@ void kern_main()
 
     // fix value written to RX Control Register
     trampoline_hook_before(0x123ba608, rx_control_hook);
+
+    ax88179_apply_patches();
 }
 
 // This fn runs before MCP's main thread, and can be used
