@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <wafel/patch.h>
 #include <wafel/trampoline.h>
+#include <wafel/ios/thread.h>
 #include "iosu_ax88772.h"
 
 /* defines taken from https://github.com/torvalds/linux/blob/627277ba7c2398dc4f95cc9be8222bb2d9477800/drivers/net/usb/ax88179_178a.c#L17C1-L165C37 */
@@ -161,6 +162,18 @@ void set_ax88179_mode(bool on){
     ax88179 = on;
 }
 
+int ax8817xReadCommand_debug(void *context, void *param_2, int cmd, int index, int value, u32 size, void *buf){
+	int ret = ax8817xReadCommand(context, param_2, cmd, index, value, size, buf);
+	debug_printf("AX88179: readCommand(%p, %p, 0x%x, %i, %i, %u, %p) -> %d\n", context, param_2, cmd, index, value, size, buf, ret);
+	return ret;
+}
+
+int ax8817xWriteCommand_debug(void *context, void *param_2, int cmd, int index, int value, u32 size, void *buf){
+	int ret = ax8817xWriteCommand(context, param_2, cmd, index, value, size, buf);
+	debug_printf("AX88179: writeCommand(%p, %p, 0x%x, %i, %i, %u, %p) -> %d\n", context, param_2, cmd, index, value, size, buf, ret);
+	return ret;
+}
+
 int read_eeprom_hook(void *context, void *param_2, int cmd, int index, rw_func* org_read, int lr, int value, size_t size, void *buf){
     debug_printf("AX88179: read_eeprom(%p, %p, 0x%x, %i, %i, %u, %p)\n", context, param_2, cmd, index, value, size, buf);
     if(ax88179){
@@ -171,6 +184,41 @@ int read_eeprom_hook(void *context, void *param_2, int cmd, int index, rw_func* 
     return ret;
 }
 
+// https://github.com/torvalds/linux/blob/95d3481af6dc90fd7175a7643fd108cdcb808ce5/drivers/net/usb/ax88179_178a.c#L1686
+int read_phyid(void *context, void *param2){
+	return ax8817xReadCommand_debug(context, param2, AX_ACCESS_PHY, AX88179_PHY_ID, GMII_PHY_PHYSR, 2, context + 0x51e);
+}
+
+void power_up_phy(void *context, void *param2){
+	debug_printf("AX88179: Power up PHY\n");
+	u8 buf[5] = { 0 };
+	u16 *tmp16 = (u16 *)buf;
+	ax8817xWriteCommand_debug(context, param2, AX_ACCESS_MAC, AX_PHYPWR_RSTCTL, 2, 2, tmp16);
+
+	*tmp16 = AX_PHYPWR_RSTCTL_IPRL;
+	ax8817xWriteCommand_debug(context, param2, AX_ACCESS_MAC, AX_PHYPWR_RSTCTL, 2, 2, tmp16);
+	msleep(500);
+
+	*buf = AX_CLK_SELECT_ACS | AX_CLK_SELECT_BCS;
+	ax8817xWriteCommand_debug(context, param2, AX_ACCESS_MAC, AX_CLK_SELECT, 1, 1, buf);
+	msleep(200);
+}
+
+void reset_hook(void  *context, void *parm2){
+	read_phyid(context, parm2);
+	power_up_phy(context, parm2);
+}
+
+
+int read_phyid_hook(void *context, void *param_2, int cmd, int index, rw_func* org_read, int lr, int value, size_t size, void *buf){
+	int ret = org_read(context, param_2, AX_ACCESS_PHY, AX88179_PHY_ID, GMII_PHY_PHYSR, size, buf);
+	debug_printf("AX88179: read_pyhid_hook -> %i, phyid: %d\n", context, param_2, cmd, index, value, size, buf, ret, *(u16*)buf);
+	//power_up_phy(context, param_2);
+	return ret;
+}
+
 void ax88179_apply_patches(void) {
     trampoline_blreplace(0x123b9fb4, read_eeprom_hook);
+	trampoline_blreplace(0x123ba0a0, reset_hook);
+	trampoline_blreplace(0x123ba1ec, read_phyid_hook);
 }
