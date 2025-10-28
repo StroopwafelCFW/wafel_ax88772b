@@ -7,7 +7,7 @@ Patches IOSU to use the AX88772B (or AX88772A or AX88772C) instead of AX88772 US
 
 ## How to use
 
-- Copy the `usbeth.ipx` to `/wiiu/ios_plugins`
+- Copy the `5usbeth.ipx` to `/wiiu/ios_plugins`
 
 ## Building
 
