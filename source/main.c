@@ -17,9 +17,9 @@
 u16 usb_vid_pids[][2] = {   { 0x0b95, 0x7720 }, // AX88772
                             { 0x0b95, 0x772a }, // AX88772A
                             { 0x0b95, 0x772b }, // AX88772B
-                            { 0x0b95, 0x772c }, // AX88772C needs testing
-                            { 0x0b95, 0x772d }, // AX88772D needs testing
-                            { 0x0b95, 0x772e }, // AX88772E needs testing
+                            { 0x0b95, 0x772c }, // AX88772C
+                            // { 0x0b95, 0x772d }, // AX88772D does not work
+                            // { 0x0b95, 0x772e }, // AX88772E does not work
                             { 0x05ac, 0x1402 }, // Apple AX88772
 };
 #define USB_VID_PID_COUNT (sizeof(usb_vid_pids) / 4)
